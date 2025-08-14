@@ -2,8 +2,16 @@ from flask import Flask, request, jsonify
 import yfinance as yf
 import pandas as pd
 
+import logging
+
+# at the top
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 
+@app.route("/")
+def index():
+    return "Rolling correlation API is running."
+    
 @app.route("/correlation", methods=["POST"])
 def rolling_correlation():
     try:
@@ -30,7 +38,7 @@ def rolling_correlation():
             return jsonify({"error": f"Not enough data for the rolling window of {window} days."}), 400
 
         # Calculate rolling correlation
-        corr = returns.iloc[:, 0].rolling(f"{window}d").corr(returns.iloc[:, 1])
+        corr = returns.iloc[:, 0].rolling(window).corr(returns.iloc[:, 1])
         corr = corr.dropna()
 
         # Prepare response
@@ -39,5 +47,10 @@ def rolling_correlation():
             "correlation": corr.tolist()
         })
 
+    
+# in your route function, inside except:
     except Exception as e:
+        logging.error(f"Error in /correlation: {str(e)}", exc_info=True)
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+    
+
