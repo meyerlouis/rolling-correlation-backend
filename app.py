@@ -1,12 +1,16 @@
+import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logging.info("app.py loaded")
+
 from flask import Flask, request, jsonify
 import yfinance as yf
 import pandas as pd
+from flask_cors import CORS
 
-import logging
-
-# at the top
-logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
+CORS(app)
 
 @app.route("/")
 def index():
@@ -14,6 +18,7 @@ def index():
     
 @app.route("/correlation", methods=["POST"])
 def rolling_correlation():
+    logging.info("Received /correlation POST request")
     try:
         data = request.get_json()
 
@@ -54,3 +59,7 @@ def rolling_correlation():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
     
 
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    logging.info(f"Starting Flask app on port {port}...")
+    app.run(host="0.0.0.0", port=port)
