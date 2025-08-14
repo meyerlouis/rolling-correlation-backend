@@ -17,27 +17,27 @@ def rolling_correlation():
         if not symbol1 or not symbol2:
             return jsonify({"error": "Missing symbols"}), 400
 
-        # Download data
-        df1 = yf.download(symbol1, period=period)["Adj Close"]
-        df2 = yf.download(symbol2, period=period)["Adj Close"]
+        # Download historical data
+        df1 = yf.download(symbol1, period=period)
+        df2 = yf.download(symbol2, period=period)
 
-        # Combine and clean
-        df = pd.DataFrame({symbol1: df1, symbol2: df2}).dropna()
+        # Join close prices and calculate percent change
+        joined_df = df1['Close'].join(df2['Close'], lsuffix=f"_{symbol1}", rsuffix=f"_{symbol2}").dropna()
+        returns = joined_df.pct_change().dropna()
 
-        if df.empty:
-            return jsonify({"error": "No overlapping data found for the selected period"}), 400
+        # Make sure we have enough data for rolling window
+        if len(returns) < window:
+            return jsonify({"error": f"Not enough data for the rolling window of {window} days."}), 400
 
-        if window > len(df):
-            return jsonify({"error": f"Rolling window ({window}) is larger than data length ({len(df)})"}), 400
+        # Calculate rolling correlation
+        corr = returns.iloc[:, 0].rolling(f"{window}d").corr(returns.iloc[:, 1])
+        corr = corr.dropna()
 
-        # Compute correlation
-        correlation = df[symbol1].rolling(window).corr(df[symbol2])
-
+        # Prepare response
         return jsonify({
-            "dates": df.index.strftime('%Y-%m-%d').tolist(),
-            "correlation": correlation.tolist()
+            "dates": corr.index.strftime('%Y-%m-%d').tolist(),
+            "correlation": corr.tolist()
         })
 
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-
