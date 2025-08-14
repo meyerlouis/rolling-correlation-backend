@@ -1,40 +1,43 @@
 from flask import Flask, request, jsonify
 import yfinance as yf
 import pandas as pd
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
 
 @app.route("/correlation", methods=["POST"])
-def correlation():
-    data = request.json
-    symbol1 = data["symbol1"]
-    symbol2 = data["symbol2"]
-    window = int(data["window"])
-    period = data["period"]
-
+def rolling_correlation():
     try:
-        df1 = yf.download(symbol1, period=period)
-        df2 = yf.download(symbol2, period=period)
+        data = request.get_json()
 
-        if df1.empty or df2.empty:
-            return jsonify({"error": "Invalid ticker(s) or no data found"}), 400
+        symbol1 = data.get("symbol1", "").upper()
+        symbol2 = data.get("symbol2", "").upper()
+        window = int(data.get("window", 30))
+        period = data.get("period", "1y")
 
-        df = pd.DataFrame({
-            symbol1: df1["Adj Close"],
-            symbol2: df2["Adj Close"]
-        }).dropna()
+        if not symbol1 or not symbol2:
+            return jsonify({"error": "Missing symbols"}), 400
 
-        rolling_corr = df[symbol1].rolling(window).corr(df[symbol2])
+        # Download data
+        df1 = yf.download(symbol1, period=period)["Adj Close"]
+        df2 = yf.download(symbol2, period=period)["Adj Close"]
+
+        # Combine and clean
+        df = pd.DataFrame({symbol1: df1, symbol2: df2}).dropna()
+
+        if df.empty:
+            return jsonify({"error": "No overlapping data found for the selected period"}), 400
+
+        if window > len(df):
+            return jsonify({"error": f"Rolling window ({window}) is larger than data length ({len(df)})"}), 400
+
+        # Compute correlation
+        correlation = df[symbol1].rolling(window).corr(df[symbol2])
 
         return jsonify({
-            "dates": df.index.strftime("%Y-%m-%d").tolist(),
-            "correlation": rolling_corr.tolist()
+            "dates": df.index.strftime('%Y-%m-%d').tolist(),
+            "correlation": correlation.tolist()
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-if __name__ == "__main__":
-    app.run(debug=True)
